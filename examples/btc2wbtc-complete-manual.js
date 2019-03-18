@@ -6,7 +6,7 @@ const moment = require('moment');
 const bitcoinRpc = require('node-bitcoin-rpc');
 const BigNumber = require('bignumber.js');
 
-const btcUtils = require('./btc-utils');
+const utils = require('./utils');
 
 /**
  * Requirements:
@@ -54,8 +54,17 @@ const wanKeyObject = keythereum.importFromFile(opts.to, wanDatadir);
 const wanPrivateKey = keythereum.recover('mypassword', wanKeyObject);
 
 // Do inbound BTC to WBTC transaction
-Promise.resolve([]).then(() => {
+Promise.resolve([])
+  .then(lockBitcoin)
+  .then(sendLock)
+  .then(confirmLock)
+  .then(sendRedeem)
+  .then(confirmRedeem);
+  .catch(err => {
+    console.log('Error:', err);
+  });
 
+async function lockBitcoin() {
   console.log('Starting btc inbound lock', opts);
 
   // Create new P2SH lock address
@@ -72,82 +81,56 @@ Promise.resolve([]).then(() => {
   console.log('Send amount', sendAmount);
 
   // Send BTC to P2SH lock address
-  return btcUtils.sendBtc(bitcoinRpc, contract.address, sendAmount, opts.from);
-
-}).then(txid => {
+  const txid = await utils.sendBtc(bitcoinRpc, contract.address, sendAmount, opts.from);
 
   // Add txid to opts
   opts.txid = txid;
 
   console.log('BTC tx sent', txid);
+}
 
-  // Get the tx count to determine next nonce
-  return web3wan.eth.getTransactionCount(opts.to);
-
-}).then(txCount => {
+async function sendLock() {
 
   // Get the raw lock tx
   const lockTx = cctx.buildLockTx(opts);
 
-  // Add nonce to tx
-  lockTx.nonce = web3wan.utils.toHex(txCount);
-
-  // Sign and serialize the tx
-  const transaction = new WanTx(lockTx);
-  transaction.sign(wanPrivateKey);
-  const serializedTx = transaction.serialize().toString('hex');
-
   // Send the lock transaction on Wanchain
-  return web3wan.eth.sendSignedTransaction('0x' + serializedTx);
-
-}).then(receipt => {
+  const receipt = await utils.sendRawWanTx(web3wan, lockTx, opts.to, wanPrivateKey);
 
   console.log('Lock submitted and now pending on storeman');
   console.log(receipt);
 
-  // Scan for the lock confirmation from the storeman
-  return cctx.listenLock(opts, receipt.blockNumber);
+  return receipt;
+}
 
-}).then(log => {
+async function listenLock(receipt) {
+
+  // Scan for the lock confirmation from the storeman
+  const log = await cctx.listenLock(opts, receipt.blockNumber);
 
   console.log('Lock confirmed by storeman');
   console.log(log);
+}
 
-  // Get the tx count to determine next nonce
-  return web3wan.eth.getTransactionCount(opts.to);
-
-}).then(txCount => {
+async function sendRedeem() {
 
   // Get the raw redeem tx
   const redeemTx = cctx.buildRedeemTx(opts);
 
-  // Add nonce to tx
-  redeemTx.nonce = web3wan.utils.toHex(txCount);
-
-  // Sign and serialize the tx
-  const transaction = new WanTx(redeemTx);
-  transaction.sign(wanPrivateKey);
-  const serializedTx = transaction.serialize().toString('hex');
-
-  // Send the lock transaction on Wanchain
-  return web3wan.eth.sendSignedTransaction('0x' + serializedTx);
-
-}).then(receipt => {
+  // Send the redeem transaction on Wanchain
+  const receipt = await utils.sendRawWanTx(web3wan, redeemTx, opts.to, wanPrivateKey);
 
   console.log('Redeem submitted and now pending on storeman');
   console.log(receipt);
+}
+
+async function listenRedeem() {
 
   // Scan for the lock confirmation from the storeman
-  return cctx.listenRedeem(opts, receipt.blockNumber);
-
-}).then(log => {
+  const log = await cctx.listenRedeem(opts, receipt.blockNumber);
 
   console.log('Redeem confirmed by storeman');
   console.log(log);
   console.log('COMPLETE!!!');
 
-}).catch(err => {
-
-  console.log('Error:', err);
-
-});
+}

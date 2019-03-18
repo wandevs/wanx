@@ -6,7 +6,7 @@ const moment = require('moment');
 const bitcoinRpc = require('node-bitcoin-rpc');
 const BigNumber = require('bignumber.js');
 
-const btcUtils = require('./btc-utils');
+const utils = require('./utils');
 
 /**
  * Requirements:
@@ -45,7 +45,7 @@ const opts = {
   // Generate a new redeemKey
   redeemKey: wanx.newRedeemKey('sha256'),
 
-  // private key of from address
+  // private key of to address
   wif: 'cNggJXP2mMNSHA1r9CRd1sv65uykZNyeH8wkH3ZPZVUL1nLfTxRM',
 };
 
@@ -58,19 +58,20 @@ const wanKeyObject = keythereum.importFromFile(opts.from, wanDatadir);
 const wanPrivateKey = keythereum.recover('mypassword', wanKeyObject);
 
 // Do outbound WBTC to BTC transaction
-Promise.resolve([]).then(async () => {
+Promise.resolve([])
+  .then(sendLock)
+  .then(confirmLock)
+  .then(redeemBitcoin)
+  .catch(err => {
+    console.log('Error:', err);
+  });
+
+async function sendLock() {
 
   console.log('Starting btc outbound lock', opts);
 
   // Get the outbound fee
   const fee = await cctx.getOutboundFee(opts);
-
-  // Get the tx count to determine next nonce
-  const txCount = await web3wan.eth.getTransactionCount(opts.from);
-
-  return Promise.resolve([ fee, txCount ]);
-
-}).then(([ fee, txCount ]) => {
 
   // Attach outboundFee to opts
   opts.outboundFee = fee;
@@ -78,28 +79,20 @@ Promise.resolve([]).then(async () => {
   // Get the raw lock tx
   const lockTx = cctx.buildLockTx(opts);
 
-  // Add nonce to tx
-  lockTx.nonce = web3wan.utils.toHex(txCount);
-
-  console.log('lockTx', lockTx);
-
-  // Sign and serialize the tx
-  const transaction = new WanTx(lockTx);
-  transaction.sign(wanPrivateKey);
-  const serializedTx = transaction.serialize().toString('hex');
-
   // Send the lock transaction on Wanchain
-  return web3wan.eth.sendSignedTransaction('0x' + serializedTx);
-
-}).then(receipt => {
+  const receipt = await utils.sendRawWanTx(web3wan, lockTx, opts.from, wanPrivateKey);
 
   console.log('Lock submitted and now pending on storeman');
   console.log(receipt);
 
-  // Scan for the lock confirmation from the storeman
-  return cctx.listenLock(opts, receipt.blockNumber);
+  return receipt;
+}
 
-}).then(({ log, inputs }) => {
+async function confirmLock(receipt) {
+
+  // Scan for the lock confirmation from the storeman
+  const res = await cctx.listenLock(opts, receipt.blockNumber);
+  const { log, inputs } = res;
 
   console.log('Lock confirmed by storeman');
   console.log(log, inputs);
@@ -107,6 +100,9 @@ Promise.resolve([]).then(async () => {
   // Add lockTime and txid to opts
   opts.lockTime = Number(inputs.lockedTimestamp);
   opts.txid = inputs.txHash;
+}
+
+async function redeemBitcoin() {
 
   // Build the contract to get the redeemScript
   const contract = cctx.buildHashTimeLockContract(opts);
@@ -128,16 +124,9 @@ Promise.resolve([]).then(async () => {
   console.log('Signed redeem tx:', signedTx);
 
   // Send the redeem tx to the network
-  return btcUtils.sendRawTx(bitcoinRpc, signedTx);
-
-}).then(txid => {
+  const txid = await utils.sendRawBtcTx(bitcoinRpc, signedTx);
 
   console.log('Redeem sent to network');
   console.log('TXID:', txid);
   console.log('COMPLETE!!!');
-
-}).catch(err => {
-
-  console.log('Error:', err);
-
-});
+}
