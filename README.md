@@ -197,7 +197,7 @@ with signing handled outside of WanX.
 
 ## Development
 
-1. `git clone https://github.com/wanchain/wanx.git`
+1. `git clone https://github.com/wandevs/wanx.git`
 2. `yarn install`
 3. `yarn test`
 
@@ -215,4 +215,4 @@ with signing handled outside of WanX.
 [npm-url]: https://www.npmjs.com/package/wanx
 
 [license]: https://img.shields.io/badge/license-GNUGPL3-blue.svg
-[license-url]: https://github.com/wanchain/wanx/blob/dev/LICENSE
+[license-url]: https://github.com/wandevs/wanx/blob/dev/LICENSE
