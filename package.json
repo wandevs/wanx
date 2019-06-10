@@ -13,22 +13,22 @@
   "author": "jsgoyette",
   "license": "ISC",
   "dependencies": {
-    "ajv": "^6.5.5",
+    "ajv": "^6.10.0",
     "bignumber.js": "^7.2.1",
     "binstring": "^0.2.1",
-    "bitcoinjs-lib": "^4.0.2",
+    "bitcoinjs-lib": "^4.0.5",
     "btc-address": "^0.4.0",
     "keccak": "^1.4.0",
     "lodash": "^4.17.11",
     "moment": "^2.22.2",
-    "secp256k1": "^3.5.2",
+    "secp256k1": "^3.7.1",
     "web3": "1.0.0-beta.36"
   },
   "devDependencies": {
     "chai": "^4.2.0",
     "chai-as-promised": "^7.1.1",
     "mocha": "^5.2.0",
-    "nyc": "^14.0.0",
-    "sinon": "^7.1.1"
+    "nyc": "^14.1.1",
+    "sinon": "^7.3.2"
   }
 }
